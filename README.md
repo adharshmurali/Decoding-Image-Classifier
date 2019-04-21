@@ -19,13 +19,14 @@ The image was initially split into superpixels which are built by approximating 
 Permutation-Based Approach:
 	The Permutation-Based Approach is a model specific interpretation approach that measures the model’s prediction error for every permutation of the input feature and measures the relative importance by estimating the impact of the feature on the performance error.3 For the analysis, a test image was permuted about 1000 times by hiding certain regions of the pixel and the prediction probability was measured for every permutation based on the contribution to the prediction error the relative importance of the feature with respect to cat and dog was computed.
 	
-[Fig3. Permutation Based Approach](Permutation.png)
+[Fig3. Permutation Based Approach](permutation.png)
 
 
 
 Saliency Maps:
 	Saliency refers to the most important features of the image in the context of visual processing. The saliency maps are used to differentiate the visually alluring features from each other.4 In the context of the analysis the saliency maps were used in identifying the pro-cat and pro-dog pixels in the test image learned by the model to make a prediction. The saliency maps were constructed by differentiating the test image with respect to the class(cats or dogs). The gradients of the with respect to the class was computed by computing weights after one complete backpropagation.
-[Fig3. Saliency Map of the Classifier](Saliency.png)
+
+[Fig4. Saliency Map of the Classifier](Saliency.png)
 
 Conclusion:
 	The methods explored during the class shows that the experimented methods can also be further expanded to cross-sectional and other data formats to identify the key variables in making the decision. This indeed proves that black box models can also be decoded and can be used in the policy front and other sectors which relies on causal inference in making the decision. 
