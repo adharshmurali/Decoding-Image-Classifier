@@ -12,10 +12,17 @@ Local Interpretable Model Agnostic Explanation(LIME):
 [Fig1. Superpixel of the image](superpixel.png)
 
 The image was initially split into superpixels which are built by approximating the image regions locally. The superpixels were used by the LIME model to measure the interaction between a different feature to identify the pro-dog and the pro-cat features considered by the model in the given image.
+
 [Fig2. Pro cat and Pro dog features of the image](Lime.png)
+
+
 Permutation-Based Approach:
 	The Permutation-Based Approach is a model specific interpretation approach that measures the model’s prediction error for every permutation of the input feature and measures the relative importance by estimating the impact of the feature on the performance error.3 For the analysis, a test image was permuted about 1000 times by hiding certain regions of the pixel and the prediction probability was measured for every permutation based on the contribution to the prediction error the relative importance of the feature with respect to cat and dog was computed.
+	
 [Fig3. Permutation Based Approach](Permutation.png)
+
+
+
 Saliency Maps:
 	Saliency refers to the most important features of the image in the context of visual processing. The saliency maps are used to differentiate the visually alluring features from each other.4 In the context of the analysis the saliency maps were used in identifying the pro-cat and pro-dog pixels in the test image learned by the model to make a prediction. The saliency maps were constructed by differentiating the test image with respect to the class(cats or dogs). The gradients of the with respect to the class was computed by computing weights after one complete backpropagation.
 [Fig3. Saliency Map of the Classifier](Saliency.png)
