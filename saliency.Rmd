@@ -1,0 +1,178 @@
+---
+title: "Building a Saliency Maps for the CNN models"
+output: html_notebook
+---
+
+
+```{r setup,include=FALSE}
+
+library(tidyverse)
+library(keras)
+library(reticulate)
+
+r_model=load_model_hdf5("F:\\image_classifier.hdf5")
+```
+
+
+#Pipeline for my input and output model as my datagenarator
+```{r}
+
+#Loading the images from the sample cats dataframe and resizing them into a tensor
+sample_cats="F://training_set/training_set"
+#Writing a train generator to take the image from the files and convert into RGB datapoints later into float-point tensors
+train_datagen <- image_data_generator(rescale = 1/255)
+#validation_datagen <- image_data_generator(rescale = 1/255)
+train_generator <- flow_images_from_directory(
+sample_cats,
+train_datagen,
+target_size = c(150, 150),
+batch_size = 20,
+class_mode = "binary"
+)
+# Creating the test set generator.
+test_data <- "F://test_set/test_set"
+test_datagen <- image_data_generator(rescale = 1/255)
+#validation_datagen <- image_data_generator(rescale = 1/255)
+test_generator <- flow_images_from_directory(
+test_data,
+test_datagen,
+target_size = c(150, 150),
+batch_size = 20,
+class_mode = "binary"
+)
+
+```
+
+#Building a simple neural network with 
+```{r}
+input=layer_input(shape=c(150,150,3))
+conv_base <- application_vgg16(
+#Loading the weights from the imagenet dataset
+weights = "imagenet",
+#The dense layers from the image net classifiers are not used for the analysis hence declared false.
+include_top = FALSE,
+#Checking the shape of the input tensor to be given to the model.
+input_tensor = input
+)
+
+output=conv_base$output %>% layer_flatten(input_shape=layer_input(shape=c(4,4,512))) %>% layer_dense(units = 256, activation = "relu",
+input_shape = 4 * 4 * 512) %>%
+layer_dropout(rate = 0.5) %>%
+layer_dense(units = 1, activation = "sigmoid")
+
+model=keras_model(inputs = input,outputs = output)
+
+
+model %>% compile(
+optimizer = optimizer_rmsprop(lr = 2e-5),
+loss = "binary_crossentropy",
+metrics = c("accuracy")
+)
+
+model %>% fit_generator(train_generator,epoch=20,steps_per_epoch=20)
+  
+
+
+model %>% evaluate_generator(test_generator, steps = 50)
+
+
+model %>% save_model_hdf5("F:\\convnet.hdf5")
+```
+
+
+```{r}
+v=model %>%get_layer('dense_4')
+v $output$shape
+
+
+model %>% gee
+```
+
+
+```{python}
+
+import numpy as np
+import keras 
+import tensorflow
+
+```
+
+```{r}
+#repl_python()
+```
+
+
+
+```{r}
+#Importing image for the analysis
+train_image=image_load("F:/cat_dog.jpg",target_size = c(150,150))
+train_array=image_to_array(train_image)
+train_array =train_array %>% normalize(axis=-1)
+rgb_image=image_to_array(train_image)
+
+```
+#Now let's try to compute the gradient for the model with respect to the image
+```{r}
+
+
+predictions=model %>% predict(array_reshape(train_array,dim=c(1,150,150,3)))
+#The final layer of the model
+final_dense_layer=model %>% get_layer('dense_4')
+#This extracts the output of the model for the given image
+image_output=model$output[,which.max(predictions)]
+#Now computing the gradient for the model with respect to the output classes(change in each pixel of the image with respect to the model)
+grads=model$optimizer$get_gradients(model$output[,which.max(predictions)],model$input)
+#Now write the gradient generator function
+results=k_function(inputs=list(model$input),outputs = (grads))
+
+```
+
+
+```{r}
+model$get_layer('dense_4') %>% get_weights()
+
+wat=results(list(array_reshape(train_array,dim=c(1,150,150,3))))
+```
+
+```{r}
+g=matrix(0,nrow = 150,ncol = 150)
+z=wat[[1]]
+for (i in 1:150){
+  for (j in 1:150){
+    g[i, j]=mean(z[1,i,j,])/0.0319298*100
+  }
+}
+
+dim(z)
+
+for (i in 1:150) {
+  g[i,] = rowMeans(z[1,i,,])
+}
+  
+
+
+```
+#Finally placing all the results into a dataframe to plot the results
+```{r}
+b=g %>% as.data.frame()
+b=b%>% mutate(x=1:150)
+b=b %>% gather(y,value,V1:V150) %>% select(x,y,value)
+b=b %>% mutate(y=stringr::str_extract(y,"\\d+"))
+
+b =
+  b %>%
+  mutate(y=as.integer(y))
+
+```
+
+
+```{r}
+#%>% mutate(value=as.numeric(cut(value,5)))
+ggplot(b %>% mutate(value=as.numeric(cut(value,7))) ,aes(x=x,y=y,fill=value,alpha=0.9))+
+  scale_fill_gradient2(high=("blue"),low=("green"),midpoint =4 )+
+  annotation_raster(as.raster(rgb_image,nrow=150,ncol=150,max=255),xmin=150,xmax=0,ymin=0,ymax=-150)+
+  geom_raster()+
+  theme_light()+
+  scale_y_reverse(limits=c(150,0))
+```
+
