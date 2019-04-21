@@ -1,0 +1,275 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup,include=FALSE}
+#loading the library for the analysis
+library(tidyverse)
+library(keras)
+library(lime)
+library(jpeg)
+library(magick)
+library(reticulate)
+use_python("C:/Users/admin/Anaconda3/python.exe",TRUE)
+
+model=load_model_hdf5("F:\\image_Classifier.hdf5")
+#use_condaenv()
+#reticulate::use_python('C:/Users/admin/AppData/Local/Programs/Python/Python36-32/python.exe',TRUE)
+#knitr::knit_engines$set(python=reticulate::eng_python)
+```
+
+```{python ,echo=TRUE}
+import networkx as nx
+
+```
+
+
+#Step1:Loading the image and transforming the space into multiple different images
+```{r}
+#Loading the image into the notebook for the analysis
+#train_image=image_load("F:/training_set/training_set/cats/cat.94.jpg",target_size = c(150,150))
+#Now getting the array of the image loaded into the notebook
+train_image=image_load("F:/cat_dog.jpg",target_size = c(150,150))
+train_array=image_to_array(train_image) 
+
+output_array=conv_base %>% predict(array_reshape(train_array,dim=c(1,150,150,3)) %>% imagenet_preprocess_input())
+preds=as.numeric(predict_proba(model,array_reshape(output_array,dim=c(1,4*4*512))))
+#train_array=readJPEG("F:/training_set/training_set/cats/cat.3.jpg")
+#d=as.raster(train_image)
+
+img=magick::image_read("F:/training_set/training_set/cats/cat.94.jpg")
+
+#train_image$show()
+knock_out_box_height_start = sample(dim(train_array)[1],1)
+knock_out_box_height_end = sample(dim(train_array)[1],1)
+knock_out_box_width_start = sample(dim(train_array)[2],1)
+knock_out_box_width_end = sample(dim(train_array)[2],1)
+
+#dim(train_array)
+#Load the model of dense layers for the analysis
+#model=load_model_hdf5("F:/image_classifier.hdf5")
+
+colo_image=function(a,b,c,d){
+train_array[a:b,c:d,]=122
+train_array=train_array %>% normalize(axis=1)
+return(train_array)
+}
+
+```
+#Step 2: Knocking off the features and making the convolution learn different filters than usual,and making the max_pool to give different rendering out of each assumption.
+```{r}
+#Now writing a function that generates for every run a sample of image and the prediction is taken
+#From the analysis a value less tha 0.5 is cat while value greater than the 0.5 is dog.
+feature_extractor=function(train_array){
+temp_array=train_array
+knock_out_box_height_start = sample(dim(train_array)[1],1)
+knock_out_box_height_end = sample(dim(train_array)[1],1)
+knock_out_box_width_start = sample(dim(train_array)[2],1)
+knock_out_box_width_end = sample(dim(train_array)[2],1)
+
+temp_array[knock_out_box_width_start:knock_out_box_width_end,knock_out_box_height_start:knock_out_box_height_end,]=122
+#Reshaping the array to build the classifier into the shape (1,150,150,3)
+temp_array=temp_array %>% array_reshape(dim=c(1,150,150,3)) %>% imagenet_preprocess_input()
+#Let's preprocess the image for the imagenet although there is only one 
+#extracting the feature
+#This the ouput from the last layer of the convnet
+feature_array=array(0,dim=c(1,4,4,512))
+feature_array[1,,,]=conv_base %>% predict(temp_array)
+#Now using the model of dense layers to predict the final output
+feature_array=array_reshape(feature_array,dim=c(1,4*4*512))
+res=as.numeric(predict_proba(model,feature_array))
+return(list(res,knock_out_box_width_start,knock_out_box_width_end,knock_out_box_height_start,knock_out_box_height_end))
+
+}
+
+
+
+```
+#Step 3: Creating a dataframe with the pred value 
+```{r}
+width_start=list()
+height_start=list()
+width_end=list()
+height_end=list()
+pred=list()
+for(i in seq(1,1000,1)){
+a=feature_extractor(train_array)
+width_start=append(width_start,min(a[[2]][1],a[[3]][1]))
+width_end=append(width_end,max(a[[2]][1],a[[3]][1]))
+height_start=append(height_start,min(a[[4]][1],a[[5]][1]))
+height_end=append(height_end,max(a[[5]][1],a[[4]][1]))
+pred=append(pred,a[[1]][1])
+}  
+```
+
+```{r}
+#Creating a data frame with the available list
+result_dataframe=tibble(width_start=as.numeric(width_start),width_end=as.numeric(width_end),height_start=as.numeric(height_start),height_end=as.numeric(height_end),pred=as.numeric(pred))
+
+write.csv(result_dataframe,"F://results1.csv")
+```
+
+```{r}
+#Performing a descriptive statistic to draw the possible start and the end points of the pro dog featires
+result_dataframe=data.table::fread("F://results.csv") %>% as.tibble()
+dog_features=result_dataframe %>% 
+  filter(pred==1.0)
+#knitr::knit_engines$set(python = reticulate::eng_python)
+```
+
+```{python}
+#Plotting the image on a graph
+import matplotlib.pyplot as plt
+#plt.imshow(train_image)
+
+
+```
+
+
+#Buiding the image feature and plotting the feature importance.
+```{r}
+#count=0
+#for (i in seq(1,15,1) ){
+#b=dog_features %>% filter(count<width_start&width_start <=i*10) %>% arrange(desc(width_end)) %>% slice(1) 
+#e=feature_identifier(b %>% pull(1),b %>% pull(2),b %>% pull(3),b %>% pull(4))
+#temp=train_array
+#temp[e[[1]][1]:e[[2]][1],e[[3]][1]:e[[4]][1],]=122
+#temp=temp %>% normalize(axis=1)
+#plot(1, type="n", xlim=c(100, 150), ylim=c(300, 350))
+#rasterImage(temp,100, 300, 150, 350, interpolate = FALSE)
+#count=count+10
+#}
+
+
+
+slow_loop = function() {
+  #conv_base %>% predict(train_array)\
+  
+  
+  avg_pred = preds # in this example, the overall prediction was cat with 100% probability
+
+  average_effect_matrix = matrix(0,nrow=150,ncol=150)
+
+  for (x in 1:150) {
+  for (y in 1:150) {
+    # average prediction when pixel is knocked out = ____
+    result_dataframe %>%
+      filter(width_start <= x & width_end >= x) %>% 
+      filter(height_start <= y & height_end >= y) %>% 
+      pull(pred) -> relevant_preds
+    
+  if (length(relevant_preds) == 0) {
+    mean_pred = avg_pred
+  } else {
+    mean_pred = mean(relevant_preds)
+  }
+    
+    
+  effect_of_pixel = mean_pred - avg_pred
+  average_effect_matrix[x,y] = effect_of_pixel
+  }
+  }
+  return(average_effect_matrix)
+}
+
+fast_loop = compiler::cmpfun(slow_loop)
+
+
+average_effect_matrix=fast_loop()
+
+df_avg_effect = average_effect_matrix %>% 
+  as.tibble() %>% 
+  mutate(x=1:150) %>%  
+  gather(y,effect,V1:V150) %>% 
+  select(x,y,effect)
+
+df_avg_effect =
+df_avg_effect %>% 
+  mutate(y = stringr::str_extract(y,'\\d+'))
+
+df_avg_effect =
+  df_avg_effect %>%
+  mutate(y=as.integer(y))
+
+#img=magick::image_scale(img,"150")
+
+#ggplot(df_avg_effect %>% mutate(effect= cut(effect, 4)),aes(x=x,y=y, fill=effect,alpha=1))+annotation_raster(as.raster(train_array,nrow=150,ncol=150,max=255),xmin=150,xmax=0,ymin=0,ymax=-150)+geom_raster()+theme_light()+scale_y_reverse(limits=c(150,0))
+
+ggplot(df_avg_effect,aes(x=x,y=y,fill=1+round(effect,1),alpha=0.9))+scale_fill_gradient2(high=("blue"),low=("red"),midpoint = 0.6)+annotation_raster(as.raster(train_array,nrow=150,ncol=150,max=255),xmin=150,xmax=0,ymin=0,ymax=-150)+geom_raster()+theme_light()+scale_y_reverse(limits=c(150,0))
+#annotation_custom(g,0,150,0,150)
+
+
+
+dg=df_avg_effect %>% mutate(d=cut(effect,4))
+feature_identifier=function(a,b,c,d){
+  for (i in seq(1,1000,1)){
+  
+    if(a<b){
+    temp=train_array
+    b=b-5
+    temp[a:b,c:d,]=122
+    dummy=feature_extractor(temp)
+    #print(i)
+    if(dummy[[1]][1]<=0.6){
+      print(dummy[[1]][1])
+      return(list(a,b,c,d))
+    }
+    }
+  else{
+    print(i)
+  return(list(a,b,c,d))
+    #break
+  }
+}
+}
+#x=abs(rnorm(100))
+```
+
+
+#Adharsh' Evaluation on the new features.
+```{r}
+
+df_avg_effect %>% mutate(final= case_when(effect>-1&effect<=0.5~1,effect>-0.51&effect<=-0.25~2,TRUE~3))
+
+ggplot(df_avg_effect %>% mutate(effect=as.numeric(cut(effect,3))),aes(x=x,y=y, fill=effect,alpha=0.2))+ geom_raster()+theme_light() + scale_y_reverse()
+```
+
+```{r}
+
+ggplot(df_avg_effect%>% mutate(effect=as.numeric(cut(effect,5))),aes(x=x,y=y,fill=effect,alpha=0.9))+scale_fill_gradient2(high=("blue"),low=("green"),midpoint =3 )+annotation_raster(as.raster(train_array,nrow=150,ncol=150,max=255),xmin=150,xmax=0,ymin=0,ymax=-150)+geom_raster()+theme_light()+scale_y_reverse(limits=c(150,0))
+
+```
+#Cat_dogs picture
+```{r}
+ggplot(df_avg_effect%>% mutate(effect=as.numeric(cut(effect,3))),aes(x=x,y=y,fill=effect,alpha=0.9))+scale_fill_gradient2(high=("blue"),low=("green"),midpoint =2.25 )+annotation_raster(as.raster(train_array,nrow=150,ncol=150,max=255),xmin=150,xmax=0,ymin=0,ymax=-150)+geom_raster()+theme_light()+scale_y_reverse(limits=c(150,0))
+```
+
+#Extracting the class saliency for model
+```{r}
+
+#Building a function to extract the class saliency..
+model %>% get_input_at(1)
+
+a=model %>% get_output_at(0)
+a[[0]][1]
+single_saliency=function(){
+  
+}
+
+a=model %>% get_output_at(1)
+
+
+
+```
+
+```{r}
+#Function to generare the gradient for the model.
+
+get_gradient=function(x){
+  
+  
+  
+}
+```
+
