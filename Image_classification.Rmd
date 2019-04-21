@@ -1,0 +1,164 @@
+---
+title: "Image Classification using Pre-Trained Network"
+output: html_notebook
+---
+
+```{r}
+#Importing the libraries for the classification
+library(keras)
+library(tidyverse)
+
+```
+#Loading in the dataset for the classification.
+
+```{r}
+#Let's write the application to download the dataset from the web and create the folder in the file system
+cat_files="F://training_set/training_set/cats"
+dog_files="F://training_set/training_set/dogs"
+#Now its time to read in the individual files as the PIL files
+#Present the image as the 4-d tensor.
+#Now the problem remains to fetch the data as an Binary dataset
+cat("The total number of training images:",length(list.files(cat_files)))
+
+```
+ 
+```{r}
+#Loading the images from the sample cats dataframe and resizing them into a tensor
+sample_cats="F://training_set/training_set"
+#Writing a train generator to take the image from the files and convert into RGB datapoints later into float-point tensors
+train_datagen <- image_data_generator(rescale = 1/255)
+#validation_datagen <- image_data_generator(rescale = 1/255)
+train_generator <- flow_images_from_directory(
+sample_cats,
+train_datagen,
+target_size = c(150, 150),
+batch_size = 20,
+class_mode = "binary"
+)
+# Creating the test set generator.
+test_data <- "F://test_set/test_set"
+test_datagen <- image_data_generator(rescale = 1/255)
+#validation_datagen <- image_data_generator(rescale = 1/255)
+test_generator <- flow_images_from_directory(
+test_data,
+test_datagen,
+target_size = c(150, 150),
+batch_size = 20,
+class_mode = "binary"
+)
+
+```
+#Now the dataset is loaded into the generator.The problem is reduced to loading a pretrained convolution base.And then train the model using dense layers and final sigmoid activation function to binary classify the data.
+```{r}
+batch=generator_next(train_generator)
+str(batch)
+```
+```{r}
+#Loading the application vgg16 version of teh imagenet classifier.
+conv_base <- application_vgg16(
+#Loading the weights from the imagenet dataset
+weights = "imagenet",
+#The dense layers from the image net classifiers are not used for the analysis hence declared false.
+include_top = FALSE,
+#Checking the shape of the input tensor to be given to the model.
+input_shape = c(150, 150, 3)
+)
+```
+
+```{r}
+#The convolution base.
+conv_base
+```
+
+```{r}
+#The workflow for the rest of the image processing.
+#Now having the convolution base.The following tasks has to be performed.
+#1.Every image in the training set has to go through the convolution base and features must be extracted for the images.
+#The predict function in the convolution base extracts the features of the input batch which was sent in a batch processing mode.
+#2. Once the features are extracted the images are flattened and dense layers are build for the training dataset.
+#We have 8005 images in 2 classes
+#Initially create a array with 8005,4,4,512 for feature space
+#Create a array with 8005
+```
+
+```{r}
+#
+batch_size=20
+extract_features <- function(directory, sample_count) {
+features <- array(0, dim = c(sample_count, 4, 4, 512))
+labels <- array(0, dim = c(sample_count))
+generator <- flow_images_from_directory(
+directory = directory,
+generator = train_datagen,
+target_size = c(150, 150),
+batch_size = batch_size,
+class_mode = "binary"
+)
+i <- 0
+while(TRUE) {
+batch <- generator_next(generator)
+inputs_batch <- batch[[1]]
+labels_batch <- batch[[2]]
+features_batch <- conv_base %>% predict(inputs_batch)
+index_range <- ((i * batch_size)+1):((i + 1) * batch_size)
+features[index_range,,,] <- features_batch
+labels[index_range] <- labels_batch
+i <- i + 1
+if (i * batch_size >= sample_count)
+break
+}
+list(
+features = features,
+labels = labels
+)
+}
+
+```
+#Function call to extract the final features for the classification.
+```{r}
+train_features=extract_features(sample_cats,8000)
+test_features=extract_features(test_data,2000)
+```
+
+#Now flattening the tensor into a one dimensional frame to feed to the dense layers for the prediction
+```{r}
+reshape_features <- function(features) {
+array_reshape(features, dim = c(nrow(features), 4 * 4 * 512))
+}
+train_features$features <- reshape_features(train_features$features)
+test_features$features <- reshape_features(test_features$features)
+```
+
+
+
+
+```{r}
+model <- keras_model_sequential() %>%
+layer_dense(units = 256, activation = "relu",
+input_shape = 4 * 4 * 512) %>%
+layer_dropout(rate = 0.5) %>%
+layer_dense(units = 1, activation = "sigmoid")
+model %>% compile(
+optimizer = optimizer_rmsprop(lr = 2e-5),
+loss = "binary_crossentropy",
+metrics = c("accuracy")
+)
+history <- model %>% fit(
+train_features$features, train_features$labels,
+epochs = 30,
+batch_size = 20
+
+)
+```
+#Evaluating the 
+```{r}
+model %>% evaluate_generator(test_generator, steps = 50)
+```
+```{r}
+keras::save_model_hdf5(model,"F:/image_classifier.hdf5")
+```
+
+```{r}
+
+```
+
